@@ -352,7 +352,7 @@ def analyze_poi_statistics(json_path):
 
 
 if __name__ == "__main__":
-    base_dir = r"e:\Deskep\Final\in_city"
+    base_dir = r"e:\Deskep\P_sdor\in_city"
     json_path = os.path.join(base_dir, "mart_hex_analysis", "合肥市_mart_hex_analysis.json")
     
     # 生成可视化（HTML和PNG格式）

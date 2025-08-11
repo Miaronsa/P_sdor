@@ -4,9 +4,9 @@ import os
 import re
 
 # 输入和输出文件路径
-input_csv_path = 'e:/Deskep/Final/mart/csv/restaraunt_all/sales_customers.csv'
-output_json_dir = 'e:/Deskep/Final/mart/json'
-output_json_path = os.path.join(output_json_dir, 'sales_customers_final.json')
+input_csv_path = 'e:/Deskep/P_sdor/mart/csv/restaraunt_all/sales_customers.csv'
+output_json_dir = 'e:/Deskep/P_sdor/mart/json'
+output_json_path = os.path.join(output_json_dir, 'sales_customers_P_sdor.json')
 
 # 确保输出目录存在
 os.makedirs(output_json_dir, exist_ok=True)

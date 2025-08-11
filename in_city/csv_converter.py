@@ -6,9 +6,9 @@ def process_unclassified_csv():
     处理csv目录中的CSV文件，仅保留指定的列
     首先检查csv/unclassified文件夹，然后检查csv根目录
     """
-    csv_root_dir = r"e:\Deskep\Final\in_city\csv"
-    unclassified_dir = r"e:\Deskep\Final\in_city\csv\unclassified"
-    classified_dir = r"e:\Deskep\Final\in_city\csv\classified"
+    csv_root_dir = r"e:\Deskep\P_sdor\in_city\csv"
+    unclassified_dir = r"e:\Deskep\P_sdor\in_city\csv\unclassified"
+    classified_dir = r"e:\Deskep\P_sdor\in_city\csv\classified"
     
     # 确保classified目录存在
     os.makedirs(classified_dir, exist_ok=True)

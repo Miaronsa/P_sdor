@@ -39,7 +39,7 @@ def process_csv_files():
     """处理所有CSV文件，按城市整合数据"""
     
     # 使用绝对路径确保文件能正确找到
-    csv_dir = r'e:\Deskep\Final\city\csv'
+    csv_dir = r'e:\Deskep\P_sdor\city\csv'
     city_data = {}
     
     # 定义文件映射和对应的指标字段
@@ -181,7 +181,7 @@ def process_csv_files():
     
     return filtered_city_data
 
-def save_to_json(city_data, output_file='e:/Deskep/Final/city/json/city_indicators.json'):
+def save_to_json(city_data, output_file='e:/Deskep/P_sdor/city/json/city_indicators.json'):
 
     """保存数据到JSON文件"""
     try:
