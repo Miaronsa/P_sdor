@@ -255,7 +255,7 @@ if __name__ == "__main__":
     json_dir = os.path.join(script_dir, 'json')
     output_dir = os.path.join(script_dir, 'mart_hex_analysis')
     
-    print("商场hex分析器启动")
+    print("商场hex提取器启动")
     print(f"JSON目录: {json_dir}")
     print(f"输出目录: {output_dir}")
     
