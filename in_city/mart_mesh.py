@@ -11,6 +11,7 @@ import os
 import h3
 from typing import Dict, List, Any, Set
 from collections import defaultdict
+import pandas as pd
 
 
 def load_city_json(json_file_path: str) -> Dict[str, Any]:
@@ -248,8 +249,6 @@ def process_cities(json_dir: str, output_dir: str):
 
 
 if __name__ == "__main__":
-    import pandas as pd
-    
     # 设置路径
     script_dir = os.path.dirname(os.path.abspath(__file__))
     json_dir = os.path.join(script_dir, 'json')

@@ -8,6 +8,11 @@ import numpy as np
 from typing import Dict, List, Any
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 def load_city_json(json_file_path: str) -> Dict[str, Any]:
@@ -22,48 +27,34 @@ def load_city_json(json_file_path: str) -> Dict[str, Any]:
 
 
 def get_color_from_density(poi_count: int, max_poi_count: int) -> str:
-    """根据POI密度生成颜色，使用优化的颜色映射"""
+    """根据POI密度生成颜色，适配深色底图"""
     if max_poi_count == 0:
-        return '#2166ac'  # 默认深蓝色
-    
-    # 计算密度比例 (0-1)
-    raw_ratio = poi_count / max_poi_count
-    
-    # 使用平方根缩放来增加颜色差距，同时避免过度极端
+        return '#444444'  # 默认深灰色
+
+    # 使用平方根缩放来增加颜色差距
     if poi_count == 0:
         density_ratio = 0
     else:
-        # 平方根缩放: sqrt(poi_count / max_poi_count)
-        density_ratio = np.sqrt(raw_ratio)
-    
-    # 增加颜色范围，使用0.05-0.95来保证有明显的颜色差异
-    density_ratio = 0.05 + density_ratio * 0.9
-    
-    # 使用更鲜明的颜色映射
-    # 低密度: 深蓝色 (#2166ac)
-    # 中低密度: 浅蓝色 (#67a9cf) 
-    # 中高密度: 橙色 (#f4a582)
-    # 高密度: 深红色 (#b2182b)
-    
-    if density_ratio <= 0.33:
-        # 从深蓝色到浅蓝色
-        t = density_ratio * 3  # 0-1
-        r = int(33 + (103 - 33) * t)
-        g = int(102 + (169 - 102) * t)
-        b = int(172 + (207 - 172) * t)
-    elif density_ratio <= 0.66:
-        # 从浅蓝色到橙色
-        t = (density_ratio - 0.33) * 3  # 0-1
-        r = int(103 + (244 - 103) * t)
-        g = int(169 + (165 - 169) * t)
-        b = int(207 + (130 - 207) * t)
+        density_ratio = np.sqrt(poi_count / max_poi_count)
+
+    # 颜色方案: 深灰 -> 黄 -> 白
+    # 0.0: #444444 (深灰)
+    # 0.5: #ffff00 (黄)
+    # 1.0: #ffffff (白)
+
+    if density_ratio < 0.5:
+        # 从深灰到黄
+        t = density_ratio * 2  # 0-1
+        r = int(0x44 + (0xff - 0x44) * t)
+        g = int(0x44 + (0xff - 0x44) * t)
+        b = int(0x44 + (0x00 - 0x44) * t)
     else:
-        # 从橙色到深红色
-        t = (density_ratio - 0.66) * 3  # 0-1
-        r = int(244 + (178 - 244) * t)
-        g = int(165 + (24 - 165) * t)
-        b = int(130 + (43 - 130) * t)
-    
+        # 从黄到白
+        t = (density_ratio - 0.5) * 2  # 0-1
+        r = int(0xff + (0xff - 0xff) * t)
+        g = int(0xff + (0xff - 0xff) * t)
+        b = int(0x00 + (0xff - 0x00) * t)
+
     # 确保颜色值在有效范围内
     r = max(0, min(255, r))
     g = max(0, min(255, g))
@@ -72,15 +63,31 @@ def get_color_from_density(poi_count: int, max_poi_count: int) -> str:
     return f'#{r:02x}{g:02x}{b:02x}'
 
 
-def create_single_city_map(city_data: Dict[str, Any], output_dir: str = "html") -> str:
-    """为单个城市创建H3网格可视化地图，颜色基于POI密度"""
+def create_single_city_map(city_data: Dict[str, Any], html_dir: str, png_dir: str) -> None:
+    """为单个城市创建H3网格可视化地图和PNG，并保存到指定目录"""
+    city_name = city_data.get('city_name', '未知城市')
+    
+    # 为每个城市创建独立的输出目录
+    city_html_dir = os.path.join(html_dir, city_name)
+    city_png_dir = os.path.join(png_dir, city_name)
+    os.makedirs(city_html_dir, exist_ok=True)
+    os.makedirs(city_png_dir, exist_ok=True)
+
+    html_filename = f"{city_name}_h3_poi_density_map.html"
+    html_filepath = os.path.join(city_html_dir, html_filename)
+    png_filename = f"{city_name}_h3_poi_density_map.png"
+    png_filepath = os.path.join(city_png_dir, png_filename)
+
+    if os.path.exists(html_filepath) and os.path.exists(png_filepath):
+        print(f"城市 {city_name} 的HTML和PNG地图均已存在，跳过")
+        return
+
     try:
-        city_name = city_data.get('city_name', '未知城市')
         hex_data = city_data.get('hexes', [])
         
         if not hex_data:
             print(f"没有 {city_name} 的H3数据可供可视化")
-            return None
+            return
         
         # 计算地图中心点
         lats = [hex_info['lat'] for hex_info in hex_data]
@@ -98,7 +105,7 @@ def create_single_city_map(city_data: Dict[str, Any], output_dir: str = "html") 
         m = folium.Map(
             location=[center_lat, center_lng],
             zoom_start=10,
-            tiles='OpenStreetMap'
+            tiles='CartoDB dark_matter'
         )
         
         # 添加H3网格 - 颜色基于POI密度
@@ -156,29 +163,88 @@ def create_single_city_map(city_data: Dict[str, Any], output_dir: str = "html") 
         
         # 添加图例和标题
         title_html = f'''
-                     <h3 align="center" style="font-size:20px"><b>{city_name} - H3网格POI密度可视化</b></h3>
-                     <p align="center">网格数量: {len(hex_data)}</p>
-                     <p align="center">分辨率: {city_data.get('resolution', 7)}</p>
-                     <p align="center">最大POI密度: {max_poi_count}</p>
-                     <p align="center" style="color: #b2182b;">深红色 = 最高密度</p>
-                     <p align="center" style="color: #f4a582;">橙色 = 中高密度</p>
-                     <p align="center" style="color: #67a9cf;">浅蓝色 = 中低密度</p>
-                     <p align="center" style="color: #2166ac;">深蓝色 = 最低密度</p>
-                     <p align="center">🏆 金色标记 = 密度最高区域</p>
+                     <h3 align="center" style="font-size:20px; color:white;"><b>{city_name} - H3网格POI密度可视化</b></h3>
+                     <p align="center" style="color:white;">网格数量: {len(hex_data)}</p>
+                     <p align="center" style="color:white;">分辨率: {city_data.get('resolution', 7)}</p>
+                     <p align="center" style="color:white;">最大POI密度: {max_poi_count}</p>
                      '''
         m.get_root().html.add_child(folium.Element(title_html))
         
-        # 保存地图
-        os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, f"{city_name}_h3_poi_density_map.html")
-        m.save(output_file)
+        # 修改标题和图例的HTML样式以去除顶部白色部分
+        legend_html = '''
+<div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background-color: rgba(0, 0, 0, 0.7); padding: 10px; border-radius: 5px; color: white;">
+    <h4 style="margin: 0; font-size: 16px;">图例</h4>
+    <p style="margin: 0; font-size: 14px;">白色 = 最高密度</p>
+    <p style="margin: 0; font-size: 14px;">黄色 = 中等密度</p>
+    <p style="margin: 0; font-size: 14px;">深灰 = 最低密度</p>
+    <p style="margin: 0; font-size: 14px;">🏆 金色标记 = 密度最高区域</p>
+</div>
+'''
+
+        m.get_root().html.add_child(folium.Element(legend_html))
         
-        print(f"POI密度地图已保存到: {output_file}")
-        return output_file
+        # 调整地图容器样式，去除顶部白色部分
+        style_html = '''
+<style>
+    .folium-map {
+        margin-top: 0px !important;
+    }
+</style>
+'''
+
+        m.get_root().html.add_child(folium.Element(style_html))
         
+        # 保存HTML地图
+        if not os.path.exists(html_filepath):
+            m.save(html_filepath)
+            print(f"POI密度地图已保存到: {html_filepath}")
+        else:
+            print(f"HTML地图 {html_filepath} 已存在，跳过生成。")
+
+        # 生成PNG截图
+        if not os.path.exists(png_filepath):
+            print(f"正在生成 {city_name} 的PNG截图...")
+            html_to_png(html_filepath, png_filepath)
+        else:
+            print(f"PNG截图 {png_filepath} 已存在，跳过生成。")
+
     except Exception as e:
         print(f"创建 {city_name} POI密度地图时出错: {e}")
-        return None
+
+
+def html_to_png(html_path: str, png_path: str):
+    """使用Selenium将HTML文件转换为PNG图像"""
+    if not webdriver:
+        print("Selenium不可用，跳过PNG生成。")
+        return
+
+    if not os.path.exists(html_path):
+        print(f"HTML文件不存在: {html_path}")
+        return
+
+    try:
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920,1080')  # 设置窗口大小
+
+        # 使用webdriver-manager自动管理ChromeDriver
+        service = ChromeService(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        
+        # 将本地文件路径转换为URL格式
+        url = f"file:///{os.path.abspath(html_path)}"
+        driver.get(url)
+        
+        # 等待一段时间确保地图完全加载
+        time.sleep(5)
+        
+        driver.save_screenshot(png_path)
+        driver.quit()
+        print(f"PNG截图已保存到: {png_path}")
+        
+    except Exception as e:
+        print(f"使用Selenium生成PNG时出错: {e}")
 
 
 def create_all_cities_overview_map(json_dir: str = "json", output_dir: str = "html") -> str:
@@ -234,7 +300,7 @@ def create_all_cities_overview_map(json_dir: str = "json", output_dir: str = "ht
         m = folium.Map(
             location=[overall_center_lat, overall_center_lng],
             zoom_start=6,
-            tiles='OpenStreetMap'
+            tiles='CartoDB dark_matter'
         )
         
         # 为所有H3网格添加基于POI密度的颜色多边形
@@ -312,17 +378,36 @@ def create_all_cities_overview_map(json_dir: str = "json", output_dir: str = "ht
         
         # 添加标题和图例
         title_html = f'''
-                     <h3 align="center" style="font-size:20px"><b>所有城市H3网格POI密度分布</b></h3>
-                     <p align="center">总城市数量: {len(all_cities_data)}</p>
-                     <p align="center">总网格数量: {len(all_hex_data)}</p>
-                     <p align="center">全局最大POI密度: {global_max_poi}</p>
-                     <p align="center" style="color: #b2182b;">深红色 = 最高密度</p>
-                     <p align="center" style="color: #f4a582;">橙色 = 中高密度</p>
-                     <p align="center" style="color: #67a9cf;">浅蓝色 = 中低密度</p>
-                     <p align="center" style="color: #2166ac;">深蓝色 = 最低密度</p>
-                     <p align="center">🏆 金色圆圈 = 全局密度最高区域</p>
+                     <h3 align="center" style="font-size:20px; color:white;"><b>所有城市H3网格POI密度分布</b></h3>
+                     <p align="center" style="color:white;">总城市数量: {len(all_cities_data)}</p>
+                     <p align="center" style="color:white;">总网格数量: {len(all_hex_data)}</p>
+                     <p align="center" style="color:white;">全局最大POI密度: {global_max_poi}</p>
                      '''
         m.get_root().html.add_child(folium.Element(title_html))
+        
+        # 修改标题和图例的HTML样式以去除顶部白色部分
+        legend_html = '''
+<div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background-color: rgba(0, 0, 0, 0.7); padding: 10px; border-radius: 5px; color: white;">
+    <h4 style="margin: 0; font-size: 16px;">图例</h4>
+    <p style="margin: 0; font-size: 14px;">白色 = 最高密度</p>
+    <p style="margin: 0; font-size: 14px;">黄色 = 中等密度</p>
+    <p style="margin: 0; font-size: 14px;">深灰 = 最低密度</p>
+    <p style="margin: 0; font-size: 14px;">🏆 金色标记 = 密度最高区域</p>
+</div>
+'''
+
+        m.get_root().html.add_child(folium.Element(legend_html))
+        
+        # 调整地图容器样式，去除顶部白色部分
+        style_html = '''
+<style>
+    .folium-map {
+        margin-top: 0px !important;
+    }
+</style>
+'''
+
+        m.get_root().html.add_child(folium.Element(style_html))
         
         # 保存地图
         os.makedirs(output_dir, exist_ok=True)
@@ -337,64 +422,58 @@ def create_all_cities_overview_map(json_dir: str = "json", output_dir: str = "ht
         return None
 
 
-def visualize_all_cities(json_dir: str = "json", html_dir: str = "html"):
+def visualize_all_cities(json_dir: str = "json", html_dir: str = "html", png_dir: str = "png"):
     """可视化所有城市的H3网格"""
     print("开始可视化所有城市的H3网格...")
     
-    # 获取脚本所在目录
+    # 获取脚本目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 设置所有目录路径为脚本所在目录的相对路径
     json_dir = os.path.join(script_dir, json_dir)
     html_dir = os.path.join(script_dir, html_dir)
+    png_dir = os.path.join(script_dir, png_dir)
     
     if not os.path.exists(json_dir):
         print(f"JSON目录不存在: {json_dir}")
         return
     
-    # 确保HTML输出目录存在
+    # 确保输出目录存在
     os.makedirs(html_dir, exist_ok=True)
+    os.makedirs(png_dir, exist_ok=True)
     
     processed_cities = 0
-    skipped_cities = 0
     
     # 处理单个城市文件
     for filename in os.listdir(json_dir):
         if filename.endswith('_h3_grid.json') and not filename.startswith('all_cities'):
-            city_name = filename.replace('_h3_grid.json', '')
-            html_filename = f"{city_name}_h3_poi_density_map.html"
-            html_filepath = os.path.join(html_dir, html_filename)
-            
-            # 检查HTML文件是否已存在
-            if os.path.exists(html_filepath):
-                print(f"城市 {city_name} 的POI密度地图已存在，跳过")
-                skipped_cities += 1
-                continue
-            
-            # 加载城市数据并创建地图
             json_filepath = os.path.join(json_dir, filename)
             city_data = load_city_json(json_filepath)
             
             if city_data:
-                result = create_single_city_map(city_data, html_dir)
-                if result:
-                    processed_cities += 1
-                    print(f"成功为 {city_name} 创建地图")
-                else:
-                    print(f"为 {city_name} 创建地图失败")
+                create_single_city_map(city_data, html_dir, png_dir)
+                processed_cities += 1
             else:
-                print(f"加载 {city_name} 数据失败")
+                print(f"加载 {filename} 数据失败")
     
     # 总是更新all_cities汇总地图
     print("\n更新所有城市的汇总地图...")
-    result = create_all_cities_overview_map(json_dir, html_dir)
-    if result:
+    overview_html_path = create_all_cities_overview_map(json_dir, html_dir)
+    if overview_html_path:
         print("汇总地图更新成功")
+        # 为汇总地图也生成PNG
+        overview_png_path = os.path.join(png_dir, "all_cities_poi_density_overview.png")
+        if not os.path.exists(overview_png_path):
+             html_to_png(overview_html_path, overview_png_path)
+        else:
+            print(f"汇总地图的PNG已存在于 {overview_png_path}，跳过生成。")
     else:
         print("汇总地图更新失败")
     
     print(f"\n可视化完成!")
-    print(f"处理了 {processed_cities} 个新城市")
-    print(f"跳过了 {skipped_cities} 个已存在的城市")
+    print(f"处理了 {processed_cities} 个城市")
     print(f"HTML文件保存在: {html_dir}")
+    print(f"PNG文件保存在: {png_dir}")
 
 
 if __name__ == "__main__":

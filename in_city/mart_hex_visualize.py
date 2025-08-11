@@ -266,21 +266,28 @@ def visualize_mart_hex_analysis(json_path, base_output_dir="."):
               [max(c[0] for c in all_centers), max(c[1] for c in all_centers)]]
     m.fit_bounds(bounds, padding=(10, 10))
 
-    # 添加图例
-    legend_html = f"""
-    <div style="position: fixed; 
-                bottom: 50px; left: 50px; width: 280px; height: 180px; 
-                background-color: white; border:2px solid grey; z-index:9999; 
-                font-size:12px; padding: 10px">
-    <h4>{city_name} 商场Hex分析</h4>
-    <p><i class="fa fa-square" style="color:#FF4444"></i> 商场Hex ({total_mart_hexes}个)</p>
-    <p><i class="fa fa-square" style="color:#FF8800"></i> 邻居商场Hex</p>
-    <p><i class="fa fa-square" style="color:#228B22"></i> 普通邻居Hex ({total_neighbor_hexes}个)</p>
-    <p><b>总分析区域:</b> {total_mart_hexes + total_neighbor_hexes} 个Hex</p>
-    <p><b>平均每商场Hex:</b> {total_neighbor_hexes/total_mart_hexes:.1f} 个邻居</p>
+    # 修改标题和图例的HTML样式以仿照json_visualization.py
+    legend_html = '''
+    <div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background-color: rgba(0, 0, 0, 0.7); padding: 10px; border-radius: 5px; color: white;">
+        <h4 style="margin: 0; font-size: 16px;">图例</h4>
+        <p style="margin: 0; font-size: 14px;">红色 = 商场Hex</p>
+        <p style="margin: 0; font-size: 14px;">橙色 = 邻居商场Hex</p>
+        <p style="margin: 0; font-size: 14px;">绿色 = 普通邻居Hex</p>
     </div>
-    """
+    '''
+
     m.get_root().html.add_child(folium.Element(legend_html))
+
+    # 调整地图容器样式，去除顶部白色部分
+    style_html = '''
+    <style>
+        .folium-map {
+            margin-top: 0px !important;
+        }
+    </style>
+    '''
+
+    m.get_root().html.add_child(folium.Element(style_html))
 
     # 添加图层控制
     folium.LayerControl().add_to(m)
