@@ -10,7 +10,7 @@ import time
 
 def get_city_names_from_csv():
     """从csv/classified文件夹下获取所有城市名"""
-    # 获取脚本所在目录
+    # 获取脚本所在目
     script_dir = os.path.dirname(os.path.abspath(__file__))
     csv_folder = os.path.join(script_dir, "csv", "classified")
     city_names = []
