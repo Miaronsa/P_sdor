@@ -5,13 +5,14 @@ import folium
 from folium import plugins
 import numpy as np
 from datetime import datetime
+import argparse
 
 class MeshAccurater:
     def __init__(self):
         self.input_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../in_city/json"))
         self.html_output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../mart/html"))
         self.json_output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../mart/json"))
-        self.target_resolution = 10
+        self.target_resolution = 12
         # 确保输出目录存在
         os.makedirs(self.html_output_dir, exist_ok=True)
         os.makedirs(self.json_output_dir, exist_ok=True)
@@ -57,8 +58,8 @@ class MeshAccurater:
                 
         return mall_hexes
     
-    def subdivide_hex_to_resolution_10(self, hex_index):
-        """将hex细分到分辨率10"""
+    def subdivide_hex_to_resolution_12(self, hex_index):
+        """将hex细分到分辨率12"""
         try:
             # 获取当前hex的分辨率
             current_res = h3.get_resolution(hex_index)
@@ -79,90 +80,11 @@ class MeshAccurater:
             print(f"细分hex {hex_index} 失败: {e}")
             return []
     
-    def create_visualization_map(self, city_name, mall_hexes, subdivided_data):
-        """创建可视化地图"""
-        if not mall_hexes:
-            print(f"{city_name}: 未找到商场数据")
-            return
-            
-        # 计算地图中心
-        all_lats = []
-        all_lngs = []
-        for hex_data in mall_hexes:
-            center = hex_data.get('center', [])
-            if len(center) == 2:
-                all_lats.append(center[0])
-                all_lngs.append(center[1])
-                
-        if not all_lats:
-            print(f"{city_name}: 无法获取坐标数据")
-            return
-            
-        center_lat = np.mean(all_lats)
-        center_lng = np.mean(all_lngs)
+    # def create_visualization_map(self, city_name, mall_hexes, subdivided_data):
+    #     """创建可视化地图（已禁用）"""
+    #     pass
         
-        # 创建地图
-        m = folium.Map(
-            location=[center_lat, center_lng],
-            zoom_start=12,
-            tiles='OpenStreetMap'
-        )
-        
-        # 添加原始商场hex（红色）
-        for hex_data in mall_hexes:
-            boundary = hex_data.get('boundary', [])
-            if boundary:
-                # 转换坐标格式 [lng, lat] -> [lat, lng]
-                folium_boundary = [[coord[1], coord[0]] for coord in boundary]
-                
-                folium.Polygon(
-                    locations=folium_boundary,
-                    color='red',
-                    weight=2,
-                    fillColor='red',
-                    fillOpacity=0.3,
-                    popup=f"原始商场hex: {hex_data.get('h3_index', 'N/A')}<br>"
-                          f"POI数量: {hex_data.get('poi_count', 0)}"
-                ).add_to(m)
-        
-        # 添加细分后的hex（蓝色）
-        for hex_index in subdivided_data.get('subdivided_hexes', []):
-            try:
-                boundary_coords = h3.cell_to_boundary(hex_index)
-                # h3返回的是(lat, lng)格式
-                folium_boundary = [[coord[0], coord[1]] for coord in boundary_coords]
-                
-                folium.Polygon(
-                    locations=folium_boundary,
-                    color='blue',
-                    weight=1,
-                    fillColor='blue',
-                    fillOpacity=0.1,
-                    popup=f"细分hex: {hex_index}"
-                ).add_to(m)
-            except Exception as e:
-                print(f"绘制hex {hex_index} 失败: {e}")
-                continue
-        
-        # 添加图例
-        legend_html = '''
-        <div style="position: fixed; 
-                    bottom: 50px; left: 50px; width: 200px; height: 80px; 
-                    background-color: white; border:2px solid grey; z-index:9999; 
-                    font-size:14px; padding: 10px">
-        <h4>图例</h4>
-        <p><span style="color:red;">●</span> 原始商场区域</p>
-        <p><span style="color:blue;">●</span> 细分网格(分辨率10)</p>
-        </div>
-        '''
-        m.get_root().html.add_child(folium.Element(legend_html))
-        
-        # 保存地图
-        output_file = os.path.join(self.html_output_dir, f"{city_name}_商场网格分析.html")
-        m.save(output_file)
-        print(f"地图已保存: {output_file}")
-        
-    def process_city(self, filename):
+    def process_city(self, filename, control_visualization=True):
         """处理单个城市的数据"""
         print(f"\n处理文件: {filename}")
         
@@ -182,14 +104,14 @@ class MeshAccurater:
             print(f"{city_name}: 未找到商场数据")
             return
             
-        # 细分hex到分辨率10
+        # 细分hex到分辨率12
         all_subdivided_hexes = []
         hex_details = []
         
         for hex_data in mall_hexes:
             hex_index = hex_data.get('h3_index')
             if hex_index:
-                subdivided = self.subdivide_hex_to_resolution_10(hex_index)
+                subdivided = self.subdivide_hex_to_resolution_12(hex_index)
                 all_subdivided_hexes.extend(subdivided)
                 
                 hex_details.append({
@@ -203,7 +125,7 @@ class MeshAccurater:
         print(f"细分后总hex数量: {len(all_subdivided_hexes)}")
         
         # 输出文件路径
-        json_output_file = os.path.join(self.json_output_dir, f"{city_name}_商场网格_分辨率10.json")
+        json_output_file = os.path.join(self.json_output_dir, f"{city_name}_商场网格_分辨率12.json")
         html_output_file = os.path.join(self.html_output_dir, f"{city_name}_商场网格分析.html")
 
         # 如果目标文件已存在则跳过
@@ -231,13 +153,14 @@ class MeshAccurater:
         else:
             print(f"JSON文件已存在: {json_output_file}")
 
-        # 创建可视化地图（仅当文件不存在时生成）
-        if not os.path.exists(html_output_file):
-            self.create_visualization_map(city_name, mall_hexes, output_data)
-        else:
-            print(f"HTML文件已存在: {html_output_file}")
-        
-    def process_all_cities(self):
+    # 创建可视化地图（已禁用）
+    # if control_visualization:
+    #     if not os.path.exists(html_output_file):
+    #         self.create_visualization_map(city_name, mall_hexes, output_data)
+    #     else:
+    #         print(f"HTML文件已存在: {html_output_file}")
+
+    def process_all_cities(self, control_visualization=False):
         """处理所有城市数据"""
         print("开始处理所有城市的商场网格数据...")
         
@@ -251,10 +174,10 @@ class MeshAccurater:
         print(f"找到 {len(json_files)} 个城市数据文件")
         
         for filename in json_files:
-            try:
-                self.process_city(filename)
-            except Exception as e:
-                print(f"处理 {filename} 时出错: {e}")
+                try:
+                    self.process_city(filename, control_visualization=True)
+                except Exception as e:
+                    print(f"处理 {filename} 时出错: {e}")
                 
         print("\n所有城市处理完成！")
         print(f"HTML文件保存在: {os.path.abspath(self.html_output_dir)}")
@@ -262,8 +185,12 @@ class MeshAccurater:
 
 def main():
     """主函数"""
+    parser = argparse.ArgumentParser(description="商场网格处理与可视化")
+    parser.add_argument('--visual', action='store_true', help='是否生成可视化HTML')
+    args = parser.parse_args()
+
     accurater = MeshAccurater()
-    accurater.process_all_cities()
+    accurater.process_all_cities(control_visualization=args.visual)
 
 if __name__ == "__main__":
     main()
